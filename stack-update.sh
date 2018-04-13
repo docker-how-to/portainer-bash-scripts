@@ -81,10 +81,10 @@ do
             )
     echo "Got response: $UPDATE"
     if [ -z ${UPDATE+x} ]; then
-      echo "Result: failure  to update""
+      echo "Result: failure  to update"
       exit 1
     else
-      echo "Result: successfully updated
+      echo "Result: successfully updated"
       exit 0
     fi
   fi
