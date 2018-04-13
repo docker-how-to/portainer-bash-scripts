@@ -3,6 +3,13 @@
 # [Stack Update {stack-name} {composer-file.yml}](https://github.com/docker-how-to/portainer-bash-scripts/blob/master/stack-update.sh)
 ... will update a running stack with the name given as first parameter with the yml content from the file given as the second parameter
 
+Requires:
+* bash (or sh)
+* jq
+* curl
+
+Usage:
+
 * edit file and set the authentication details
 ```variables
 P_USER="root" 
