@@ -1,0 +1,19 @@
+# Git files
+.git
+.gitignore
+
+# Local config files
+.editorconfig
+
+#build files
+build.sh
+run.sh
+buildCache.sh
+
+# Information files
+LICENSE
+README.md
+
+#Jetbrains
+.idea
+*.iml

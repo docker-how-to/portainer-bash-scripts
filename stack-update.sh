@@ -1,7 +1,8 @@
-P_USER="root" 
-P_PASS="rootroot" 
-P_URL="http://10.11.9.200:9000" 
-P_PRUNE="false"
+#!/usr/bin/env bash
+P_USER=${P_USER:-"root"}
+P_PASS=${P_PASS:-"rootroot"}
+P_URL=${P_URL:-"http://10.11.9.200:9000"}
+P_PRUNE=${P_PRUNE:-"false"}
 
 if [ -z ${1+x} ]; then
   echo "Parameter #1 missing: stack name "
