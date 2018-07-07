@@ -18,7 +18,7 @@ TARGET_YML="$2"
 
 echo "Updating $TARGET"
 
-echo "Loging in..."
+echo "Logging in..."
 P_TOKEN=$(curl -s -X POST -H "Content-Type: application/json;charset=UTF-8" -d "{\"username\":\"$P_USER\",\"password\":\"$P_PASS\"}" "$P_URL/api/auth")
 if [[ $P_TOKEN = *"jwt"* ]]; then
   echo " ... success"
@@ -39,62 +39,61 @@ STACKS=$(curl -s -H "Authorization: Bearer $T" "$P_URL/api/endpoints/1/stacks")
 #echo "/---" && echo $STACKS && echo "\\---"
 
 found=0
+stack=$(echo "$STACKS"|jq --arg TARGET "$TARGET" -jc '.[]| select(.Name == $TARGET)')
 
-for stack in $(echo "$STACKS" | jq -c '.[]')
-do
-  sid=$(echo $stack | jq ".Id")
-  sid="${sid%\"}"
-  sid="${sid#\"}"
-  name=$(echo $stack | jq ".Name")
-  name="${name%\"}"
-  name="${name#\"}"
+if [ -z "$stack" ];then
+  echo "Result: Stack not found."
+  exit 1
+fi
+sid="$(echo "$stack" |jq -j ".Id")"
+name=$(echo "$stack" |jq -j ".Name")
 
-  # name is "name" with quotes
-  if [ "${name,,}" == "${TARGET,,}" ]; then
-    found=1
-    echo "Identified stack: $sid / $name"
+found=1
+echo "Identified stack: $sid / $name"
 
-    dcompose=$(cat "$TARGET_YML")
-    dcompose="${dcompose//$'\r'/''}"
-    dcompose="${dcompose//$'"'/'\"'}"
-    dcompose="${dcompose//$"'"/"\'"}"
-    echo "/-----READ_YML--------"
-    echo "$dcompose"
-    echo "\---------------------"
-    dcompose="${dcompose//$'\n'/'\n'}"
-    data_prefix="{\"Id\":\"$sid\",\"StackFileContent\":\""
-    data_suffix="\",\"Env\":[],\"Prune\":$P_PRUNE}"
-    sep="'"
-    echo "/~~~~CONVERTED_JSON~~~~~~"
-    echo "$data_prefix$dcompose$data_suffix"
-    echo "\~~~~~~~~~~~~~~~~~~~~~~~~"
-    echo "$data_prefix$dcompose$data_suffix" > json.tmp
-    cat json.tmp | jq .
+existing_env_json="$(echo -n "$stack"|jq ".Env" -jc)"
 
-    echo "Updating stack..."
-    UPDATE=$(curl -s \
-		"$P_URL/api/endpoints/1/stacks/$sid" \
-		-X PUT \
-		-H "Authorization: Bearer $T" \
-		-H "Content-Type: application/json;charset=UTF-8" \
-                -H 'Cache-Control: no-cache'  \
-                --data-binary "@json.tmp"
-            )
-    echo "Got response: $UPDATE"
-    if [ -z ${UPDATE+x} ]; then
-      echo "Result: failure  to update"
-      exit 1
-    else
-      echo "Result: successfully updated"
-      exit 0
-    fi
-  fi
-done
+dcompose=$(cat "$TARGET_YML")
+dcompose="${dcompose//$'\r'/''}"
+dcompose="${dcompose//$'"'/'\"'}"
+dcompose="${dcompose//$"'"/"\'"}"
+echo "/-----READ_YML--------"
+
+echo "$dcompose"
+echo "\---------------------"
+dcompose="${dcompose//$'\n'/'\n'}"
+data_prefix="{\"Id\":\"$sid\",\"StackFileContent\":\""
+data_suffix="\",\"Env\":"$existing_env_json",\"Prune\":$P_PRUNE}"
+sep="'"
+echo "/~~~~CONVERTED_JSON~~~~~~"
+echo "$data_prefix$dcompose$data_suffix"
+echo "\~~~~~~~~~~~~~~~~~~~~~~~~"
+echo "$data_prefix$dcompose$data_suffix" > json.tmp
+
+echo "Updating stack..."
+UPDATE=$(curl -s \
+"$P_URL/api/endpoints/1/stacks/$sid" \
+-X PUT \
+-H "Authorization: Bearer $T" \
+-H "Content-Type: application/json;charset=UTF-8" \
+            -H 'Cache-Control: no-cache'  \
+            --data-binary "@json.tmp"
+        )
+rm json.tmp
+echo "Got response: $UPDATE"
+if [ -z ${UPDATE+x} ]; then
+  echo "Result: failure  to update"
+  exit 1
+else
+  echo "Result: successfully updated"
+  exit 0
+fi
+
 
 if [ "$found" == "1" ]; then
   echo "Result: found stack but failed to process"
   exit 1
-else 
+else
   echo "Result: fail"
   exit 1
 fi
