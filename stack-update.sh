@@ -34,7 +34,7 @@ CID=$(echo "$INFO" | awk -F '"Cluster":{"ID":"' '{print $2}' | awk -F '"' '{prin
 echo "Cluster ID: $CID"
 
 echo "Getting stacks..."
-STACKS=$(curl -s -H "Authorization: Bearer $T" "$P_URL/api/endpoints/1/stacks")
+STACKS=$(curl -s -H "Authorization: Bearer $T" "$P_URL/api/stacks")
 
 #echo "/---" && echo $STACKS && echo "\\---"
 
@@ -71,7 +71,7 @@ echo "$data_prefix$dcompose$data_suffix" > json.tmp
 
 echo "Updating stack..."
 UPDATE=$(curl -s \
-"$P_URL/api/endpoints/1/stacks/$sid" \
+"$P_URL/api/stacks/$sid?endpointId=1" \
 -X PUT \
 -H "Authorization: Bearer $T" \
 -H "Content-Type: application/json;charset=UTF-8" \
@@ -96,3 +96,4 @@ else
   echo "Result: fail"
   exit 1
 fi
+
