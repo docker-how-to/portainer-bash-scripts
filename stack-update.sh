@@ -56,7 +56,6 @@ existing_env_json="$(echo -n "$stack"|jq ".Env" -jc)"
 dcompose=$(cat "$TARGET_YML")
 dcompose="${dcompose//$'\r'/''}"
 dcompose="${dcompose//$'"'/'\"'}"
-dcompose="${dcompose//$"'"/"\'"}"
 echo "/-----READ_YML--------"
 
 echo "$dcompose"
