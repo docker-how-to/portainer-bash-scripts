@@ -37,7 +37,15 @@ if [[ $P_ENDPOINT != "" ]]; then
   if [[ $ENDPOINTS = "[]" ]]; then
     ENDPOINTS=$(curl -s -H "Authorization: Bearer $T" "$P_URL/api/endpoints?type=2&search=$P_ENDPOINT_ENC")
   fi
+  if [[ $ENDPOINTS = "[]" ]]; then
+    echo "Result: Endpoint not found."
+    exit 1
+  fi
   endpoint=$(echo "$ENDPOINTS"|jq --arg TARGET "$P_ENDPOINT" -jc '.[] | select(.Name == $TARGET)')
+  if [[ "$endpoint" = "" ]]; then
+    echo "Result: Endpoint not found."
+    exit 1
+  fi
   eid="$(echo "$endpoint" |jq -j ".Id")"
 fi
 
