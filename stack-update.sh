@@ -3,6 +3,7 @@ P_USER=${P_USER:-"root"}
 P_PASS=${P_PASS:-"rootroot"}
 P_URL=${P_URL:-"http://10.11.9.200:9000"}
 P_PRUNE=${P_PRUNE:-"false"}
+P_ENDPOINT=${P_ENDPOINT:-""}
 
 if [ -z ${1+x} ]; then
   echo "Parameter #1 missing: stack name "
@@ -29,7 +30,22 @@ fi
 T=$(echo $P_TOKEN | awk -F '"' '{print $4}')
 echo "Token: $T"
 
-INFO=$(curl -s -H "Authorization: Bearer $T" "$P_URL/api/endpoints/1/docker/info")
+if [[ $P_ENDPOINT != "" ]]; then
+  echo "Getting endpoint..."
+  P_ENDPOINT_ENC=$(printf %s "$P_ENDPOINT" | jq -sRr @uri)
+  ENDPOINTS=$(curl -s -H "Authorization: Bearer $T" "$P_URL/api/endpoints?type=1&search=$P_ENDPOINT_ENC")
+  if [[ $ENDPOINTS = "[]" ]]; then
+    ENDPOINTS=$(curl -s -H "Authorization: Bearer $T" "$P_URL/api/endpoints?type=2&search=$P_ENDPOINT_ENC")
+  fi
+  endpoint=$(echo "$ENDPOINTS"|jq --arg TARGET "$P_ENDPOINT" -jc '.[] | select(.Name == $TARGET)')
+  eid="$(echo "$endpoint" |jq -j ".Id")"
+fi
+
+eid=${eid:-"1"}
+
+echo "Using Endpoint ID: $eid"
+
+INFO=$(curl -s -H "Authorization: Bearer $T" "$P_URL/api/endpoints/$eid/docker/info")
 CID=$(echo "$INFO" | awk -F '"Cluster":{"ID":"' '{print $2}' | awk -F '"' '{print $1}')
 echo "Cluster ID: $CID"
 
