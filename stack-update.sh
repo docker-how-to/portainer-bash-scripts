@@ -3,6 +3,7 @@ P_USER=${P_USER:-"root"}
 P_PASS=${P_PASS:-"rootroot"}
 P_URL=${P_URL:-"http://10.11.9.200:9000"}
 P_PRUNE=${P_PRUNE:-"false"}
+P_ENDPOINT=${P_ENDPOINT:-""}
 
 if [ -z ${1+x} ]; then
   echo "Parameter #1 missing: stack name "
@@ -29,7 +30,30 @@ fi
 T=$(echo $P_TOKEN | awk -F '"' '{print $4}')
 echo "Token: $T"
 
-INFO=$(curl -s -H "Authorization: Bearer $T" "$P_URL/api/endpoints/1/docker/info")
+if [[ $P_ENDPOINT != "" ]]; then
+  echo "Getting endpoint..."
+  P_ENDPOINT_ENC=$(printf %s "$P_ENDPOINT" | jq -sRr @uri)
+  ENDPOINTS=$(curl -s -H "Authorization: Bearer $T" "$P_URL/api/endpoints?type=1&search=$P_ENDPOINT_ENC")
+  if [[ $ENDPOINTS = "[]" ]]; then
+    ENDPOINTS=$(curl -s -H "Authorization: Bearer $T" "$P_URL/api/endpoints?type=2&search=$P_ENDPOINT_ENC")
+  fi
+  if [[ $ENDPOINTS = "[]" ]]; then
+    echo "Result: Endpoint not found."
+    exit 1
+  fi
+  endpoint=$(echo "$ENDPOINTS"|jq --arg TARGET "$P_ENDPOINT" -jc '.[] | select(.Name == $TARGET)')
+  if [[ "$endpoint" = "" ]]; then
+    echo "Result: Endpoint not found."
+    exit 1
+  fi
+  eid="$(echo "$endpoint" |jq -j ".Id")"
+fi
+
+eid=${eid:-"1"}
+
+echo "Using Endpoint ID: $eid"
+
+INFO=$(curl -s -H "Authorization: Bearer $T" "$P_URL/api/endpoints/$eid/docker/info")
 CID=$(echo "$INFO" | awk -F '"Cluster":{"ID":"' '{print $2}' | awk -F '"' '{print $1}')
 echo "Cluster ID: $CID"
 
@@ -38,20 +62,28 @@ STACKS=$(curl -s -H "Authorization: Bearer $T" "$P_URL/api/stacks")
 
 #echo "/---" && echo $STACKS && echo "\\---"
 
-found=0
 stack=$(echo "$STACKS"|jq --arg TARGET "$TARGET" -jc '.[]| select(.Name == $TARGET)')
 
-if [ -z "$stack" ];then
-  echo "Result: Stack not found."
-  exit 1
+if [ ! -z "$stack" ]; then
+  # Updating existing
+  sid="$(echo "$stack" |jq -j ".Id")"
+  name=$(echo "$stack" |jq -j ".Name")
+  echo "Identified stack: $sid / $name"
+
+  existing_env_json="$(echo -n "$stack"|jq ".Env" -jc)"
+  data_prefix="{\"Id\":\"$sid\",\"StackFileContent\":\""
+  method="PUT"
+  add_url="/$sid?endpointId=$eid"
+  echo "Updating stack..."
+else
+  # Creating new
+  sid=""
+  existing_env_json="[]"
+  data_prefix="{\"Name\":\"$TARGET\",\"SwarmID\":\"$CID\",\"StackFileContent\":\""
+  method="POST"
+  add_url="?endpointId=$eid&method=string&type=1"
+  echo "Creating stack..."
 fi
-sid="$(echo "$stack" |jq -j ".Id")"
-name=$(echo "$stack" |jq -j ".Name")
-
-found=1
-echo "Identified stack: $sid / $name"
-
-existing_env_json="$(echo -n "$stack"|jq ".Env" -jc)"
 
 dcompose=$(cat "$TARGET_YML")
 dcompose="${dcompose//$'\r'/''}"
@@ -61,7 +93,6 @@ echo "/-----READ_YML--------"
 echo "$dcompose"
 echo "\---------------------"
 dcompose="${dcompose//$'\n'/'\n'}"
-data_prefix="{\"Id\":\"$sid\",\"StackFileContent\":\""
 data_suffix="\",\"Env\":"$existing_env_json",\"Prune\":$P_PRUNE}"
 sep="'"
 echo "/~~~~CONVERTED_JSON~~~~~~"
@@ -69,10 +100,9 @@ echo "$data_prefix$dcompose$data_suffix"
 echo "\~~~~~~~~~~~~~~~~~~~~~~~~"
 echo "$data_prefix$dcompose$data_suffix" > json.tmp
 
-echo "Updating stack..."
 UPDATE=$(curl -s \
-"$P_URL/api/stacks/$sid?endpointId=1" \
--X PUT \
+"$P_URL/api/stacks$add_url" \
+-X $method \
 -H "Authorization: Bearer $T" \
 -H "Content-Type: application/json;charset=UTF-8" \
             -H 'Cache-Control: no-cache'  \
@@ -81,19 +111,9 @@ UPDATE=$(curl -s \
 rm json.tmp
 echo "Got response: $UPDATE"
 if [ -z ${UPDATE+x} ]; then
-  echo "Result: failure  to update"
+  echo "Result: failure to create/update"
   exit 1
 else
-  echo "Result: successfully updated"
+  echo "Result: successfully created/updated"
   exit 0
 fi
-
-
-if [ "$found" == "1" ]; then
-  echo "Result: found stack but failed to process"
-  exit 1
-else
-  echo "Result: fail"
-  exit 1
-fi
-
